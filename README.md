@@ -1,6 +1,4 @@
-# Reproducible Experiment Scaffold (Beginner-Friendly)
-
-This is a tiny starter project that teaches you how to run ML experiments **reproducibly** (same setup → same results within tolerance).
+# Reproducible Experiment Scaffold
 
 ### Quickstart
 
@@ -24,24 +22,28 @@ python run.py --config configs/tiny_mlp.yaml
 python run.py --config configs/tiny_mlp.yaml
 ```
 
-### What you'll see
+### First look
+
 - A new folder under `runs/` for each execution.
 - `config.yaml` copy, `logs.csv`, `metrics.json`, and checkpoints (`last.pt`, `best.pt`).
 - Console output with epoch loss/acc, throughput, and (if on GPU) VRAM.
 
-### How to test reproducibility
-1. Run the same command twice.  
-2. Open each run's `logs.csv` and compare the **final validation loss/accuracy**.  
-3. They should match *exactly* on CPU; on some GPUs you may see tiny numeric drift. If drift is annoying:
+### Test reproducibility
+
+1. Run the same command twice.
+2. Open each run's `logs.csv` and compare the **final validation loss/accuracy**.
+3. They should match _exactly_ on CPU; on some GPUs you may see tiny numeric drift. If drift is annoying:
    - Set `deterministic: true` in config (already true by default).
    - Avoid changing hardware/drivers between runs.
    - Try running on CPU to verify determinism first.
 
 ### Make a controlled change (non-reproducible on purpose)
+
 - Change `train.batch_size` or `train.lr` in the config and re-run. Results should change—**that’s good.**
-- Change only `seed`; results should change in *predictable* ways but be **repeatable** for that seed.
+- Change only `seed`; results should change in _predictable_ ways but be **repeatable** for that seed.
 
 ### Troubleshooting determinism
+
 - DataLoader: we seed workers; keep `num_workers` low for now.
 - CUDA: exact determinism can require environment flags; start on CPU if you want bitwise-stable repeats.
 - If you use a GPU and see warnings, try:
@@ -49,6 +51,7 @@ python run.py --config configs/tiny_mlp.yaml
   - Env var for cuBLAS determinism (varies by CUDA/toolkit)
 
 ### Project structure
+
 ```
 repro_scaffold_starter/
 ├─ configs/
@@ -58,5 +61,3 @@ repro_scaffold_starter/
 ├─ requirements.txt
 └─ README.md
 ```
-
-Have fun! Keep runs tidy and write down what changed between them. Small, disciplined experiments beat giant, messy ones.

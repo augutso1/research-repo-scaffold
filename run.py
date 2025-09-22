@@ -1,16 +1,5 @@
-#!/usr/bin/env python
-"""
-Beginner-friendly reproducible experiment scaffold.
-
-- Fix seeds
-- Record git hash + config
-- Save checkpoints/artifacts
-- Log loss, throughput, VRAM
-- Re-run to match metrics within tolerance
-"""
-import os, sys, time, argparse, csv, json, subprocess, math, datetime, random
 from pathlib import Path
-
+import os, sys, time, argparse, csv, json, subprocess, math, datetime, random
 import yaml
 import numpy as np
 import torch
@@ -18,10 +7,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-# ----------------------------
+# ---------
 # Utilities
-# ----------------------------
+# ---------
 def get_git_hash():
+    '''returns abbreviated hash of current git commit'''
     try:
         h = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
         return h
@@ -29,34 +19,36 @@ def get_git_hash():
         return "nogit"
 
 def set_seed(seed: int, deterministic: bool = True):
+    '''sets random seed for random number generation. And deterministic behaviour for PyTorch'''
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    # cuDNN flags
+    # cuDNN
     torch.backends.cudnn.deterministic = bool(deterministic)
     torch.backends.cudnn.benchmark = not bool(deterministic)
-    # For extra strictness (can break unsupported ops):
-    # torch.use_deterministic_algorithms(deterministic)
+    torch.use_deterministic_algorithms(deterministic)
 
 def device_from_config(cfg):
+    '''sets torch.device based on the config'''
     dev = cfg["system"].get("device", "auto")
-    if dev == "cpu":
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
         return torch.device("cpu")
-    if dev == "cuda":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # auto
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Verifies datetime and directory existance
 def now_stamp():
     return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 def ensure_dir(p: Path):
     p.mkdir(parents=True, exist_ok=True)
 
-# ----------------------------
+# --------------------------------------
 # Data (simple synthetic classification)
-# ----------------------------
+# --------------------------------------
 def make_synthetic_split(n: int, n_features: int, n_classes: int, noise_std: float, seed: int, device):
     """
     Make a simple multi-class dataset:
@@ -66,12 +58,13 @@ def make_synthetic_split(n: int, n_features: int, n_classes: int, noise_std: flo
     gen = torch.Generator(device='cpu').manual_seed(seed)
     # fixed centers in CPU for determinism
     centers = torch.randn(n_classes, n_features, generator=gen)
-    # allocate
+    # empty matrices
     x = torch.empty(n, n_features)
     y = torch.empty(n, dtype=torch.long)
-    # roughly equal per-class
+    # distribute the classes (almost) evenly
     base = n // n_classes
     remainder = n % n_classes
+    # generate synthetic data
     idx = 0
     for c in range(n_classes):
         k = base + (1 if c < remainder else 0)
@@ -80,14 +73,15 @@ def make_synthetic_split(n: int, n_features: int, n_classes: int, noise_std: flo
         x[idx:idx+k] = pts
         y[idx:idx+k] = c
         idx += k
-    # shuffle deterministically
+    # shuffle deterministically to look more organic
     perm = torch.randperm(n, generator=gen)
     x = x[perm]
     y = y[perm]
-    # move to desired device later via DataLoader .to()
+
     return x, y
 
 def get_dataloaders(cfg, device):
+    '''wraps the dataset into tensordatasets, config the seeding for reproducibility, returns dataloader objects for training and validations'''
     ds = cfg["dataset"]
     syscfg = cfg["system"]
     bs = cfg["train"]["batch_size"]
@@ -105,6 +99,7 @@ def get_dataloaders(cfg, device):
 
     # Ensure dataloader workers are seeded deterministically
     def seed_worker(worker_id):
+        '''seeding'''
         worker_seed = seed + worker_id
         np.random.seed(worker_seed)
         random.seed(worker_seed)
